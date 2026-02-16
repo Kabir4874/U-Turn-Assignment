@@ -54,13 +54,16 @@ async function bootstrap() {
   const swaggerDoc = SwaggerModule.createDocument(app, swaggerConfig);
   SwaggerModule.setup('docs', app, swaggerDoc);
 
-  app.use(
-    helmet({
-      contentSecurityPolicy: isProd,
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    const isSwaggerRoute =
+      req.path === '/docs' || req.path.startsWith('/docs/');
+    const middleware = helmet({
+      contentSecurityPolicy: isProd && !isSwaggerRoute,
       crossOriginResourcePolicy: { policy: 'cross-origin' },
       referrerPolicy: { policy: 'no-referrer' },
-    }),
-  );
+    });
+    middleware(req, res, next);
+  });
   app.use(hpp());
   app.use(cookieParser());
 
