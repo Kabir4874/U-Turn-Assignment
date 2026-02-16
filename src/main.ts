@@ -1,7 +1,6 @@
 import 'dotenv/config';
 import csurf from 'csurf';
 import cookieParser from 'cookie-parser';
-import mongoSanitize from 'express-mongo-sanitize';
 import session from 'express-session';
 import helmet from 'helmet';
 import hpp from 'hpp';
@@ -10,7 +9,6 @@ import passport from 'passport';
 import { RequestMethod, ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { NextFunction, Request, Response } from 'express';
-import xss from 'xss-clean';
 import { AppModule } from './app.module';
 import './config/passport.config';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
@@ -64,13 +62,6 @@ async function bootstrap() {
     }),
   );
   app.use(hpp());
-  app.use(
-    mongoSanitize({
-      allowDots: false,
-      replaceWith: '_',
-    }),
-  );
-  app.use(xss());
   app.use(cookieParser());
 
   app.use(
@@ -87,33 +78,35 @@ async function bootstrap() {
   );
   app.use(passport.initialize());
   app.use(passport.session());
-  app.use(
-    csurf({
-      cookie: {
-        httpOnly: true,
-        secure: isProd,
-        sameSite: 'lax',
-      },
-    }),
-  );
-  app.use((req: Request, res: Response, next: NextFunction) => {
-    if (
-      req.method === 'GET' ||
-      req.method === 'HEAD' ||
-      req.method === 'OPTIONS'
-    ) {
-      const csrfTokenFn = (req as unknown as { csrfToken?: () => string })
-        .csrfToken;
-      if (csrfTokenFn) {
-        res.cookie('XSRF-TOKEN', csrfTokenFn(), {
-          httpOnly: false,
+  if (isProd) {
+    app.use(
+      csurf({
+        cookie: {
+          httpOnly: true,
           secure: isProd,
           sameSite: 'lax',
-        });
+        },
+      }),
+    );
+    app.use((req: Request, res: Response, next: NextFunction) => {
+      if (
+        req.method === 'GET' ||
+        req.method === 'HEAD' ||
+        req.method === 'OPTIONS'
+      ) {
+        const csrfTokenFn = (req as unknown as { csrfToken?: () => string })
+          .csrfToken;
+        if (csrfTokenFn) {
+          res.cookie('XSRF-TOKEN', csrfTokenFn(), {
+            httpOnly: false,
+            secure: isProd,
+            sameSite: 'lax',
+          });
+        }
       }
-    }
-    next();
-  });
+      next();
+    });
+  }
 
   await app.listen(process.env.PORT ?? 3000);
 }

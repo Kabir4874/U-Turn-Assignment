@@ -72,21 +72,16 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    const secret = this.configService.get<string>('JWT_ACCESS_SECRET');
-    const expiresIn = this.configService.get<string>('JWT_ACCESS_EXPIRES');
-
-    if (!secret || !expiresIn) {
-      throw new UnauthorizedException('JWT configuration missing');
-    }
-
-    const accessToken = jwt.sign({ userId: user.id, role: user.role }, secret, {
-      expiresIn,
-    } as jwt.SignOptions);
+    const { accessToken, refreshToken } = this.generateTokenPair({
+      userId: user.id,
+      role: user.role,
+    });
 
     return {
       message: 'Login successful',
       data: {
         accessToken,
+        refreshToken,
         user: {
           id: user.id,
           name: user.name,
@@ -118,5 +113,76 @@ export class AuthService {
       message: 'Profile fetched',
       data: user,
     };
+  }
+
+  async refresh(refreshToken?: string) {
+    if (!refreshToken) {
+      throw new UnauthorizedException('Refresh token is required');
+    }
+
+    const refreshSecret = this.configService.get<string>('JWT_REFRESH_SECRET');
+    if (!refreshSecret) {
+      throw new UnauthorizedException('JWT refresh secret not configured');
+    }
+
+    let payload: { userId: number; role: UserRole };
+    try {
+      payload = jwt.verify(refreshToken, refreshSecret) as {
+        userId: number;
+        role: UserRole;
+      };
+    } catch {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: payload.userId },
+    });
+    if (!user) {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+
+    const tokens = this.generateTokenPair({ userId: user.id, role: user.role });
+
+    return {
+      message: 'Tokens refreshed successfully',
+      data: tokens,
+    };
+  }
+
+  logout() {
+    return {
+      message: 'Logout successful',
+      data: null,
+    };
+  }
+
+  private generateTokenPair(payload: { userId: number; role: UserRole }) {
+    const accessSecret = this.configService.get<string>('JWT_ACCESS_SECRET');
+    const accessExpiresIn =
+      this.configService.get<string>('JWT_ACCESS_EXPIRES');
+    const refreshSecret = this.configService.get<string>('JWT_REFRESH_SECRET');
+    const refreshExpiresIn = this.configService.get<string>(
+      'JWT_REFRESH_EXPIRES',
+    );
+
+    if (
+      !accessSecret ||
+      !accessExpiresIn ||
+      !refreshSecret ||
+      !refreshExpiresIn
+    ) {
+      throw new UnauthorizedException('JWT configuration missing');
+    }
+
+    const accessToken = jwt.sign(payload, accessSecret, {
+      expiresIn: accessExpiresIn,
+    } as jwt.SignOptions);
+
+    const refreshToken = jwt.sign(payload, refreshSecret, {
+      expiresIn: refreshExpiresIn,
+    } as jwt.SignOptions);
+
+    return { accessToken, refreshToken };
   }
 }

@@ -4,12 +4,14 @@ NestJS + Prisma backend for ride matching.
 Primary requirement endpoint: `POST /api/ride/request`
 
 ## Tech Stack
+
 - NestJS
 - Prisma ORM
 - PostgreSQL
 - Swagger (`/docs`)
 
 ## Implemented Requirements
+
 - `POST /api/ride/request` implemented
 - Input: `user_id`, `pickup_lat`, `pickup_lng`, `radius_km`
 - Returns available drivers within radius
@@ -22,10 +24,13 @@ Primary requirement endpoint: `POST /api/ride/request`
   - `@@index([isAvailable, currentLat, currentLng])`
 
 ## API Docs
-- Swagger UI: `http://localhost:5000/docs` (or your configured port)
+
+- Swagger UI: `http://localhost:8000/docs`
 
 ## Project Setup
+
 1. Install dependencies
+
 ```bash
 npm install
 ```
@@ -33,27 +38,55 @@ npm install
 2. Configure your `.env` file.
 
 3. Generate Prisma client
+
 ```bash
 npm run prisma:generate
 ```
 
-4. Run migrations
+4. Run migrations (choose one path)
+
+If your database is empty (fresh setup):
+
 ```bash
-npm run prisma:migrate:dev -- --name init
+npm run prisma:migrate:deploy
+```
+
+If your database already has tables/data (baseline required):
+
+```bash
+npx prisma migrate resolve --applied 20260216120000_init
+npx prisma migrate resolve --applied 20260216133000_postgis_driver_geo_index
+npm run prisma:migrate:deploy
 ```
 
 5. Seed mock data (users + 10 drivers + cars)
+
 ```bash
 npm run prisma:seed
 ```
 
 6. Run server
+
 ```bash
 npm run start:dev
 ```
 
+## Migration Notes
+
+- This project contains two migrations:
+  - `20260216120000_init`
+  - `20260216133000_postgis_driver_geo_index`
+- The PostGIS migration enables extension + geo index for fast nearby lookup.
+- If your DB user cannot create extensions, run once as DB admin:
+
+```sql
+CREATE EXTENSION IF NOT EXISTS postgis;
+```
+
 ## Main Endpoint
+
 ### Request
+
 `POST /api/ride/request`
 
 ```json
@@ -66,6 +99,7 @@ npm run start:dev
 ```
 
 ### Response
+
 ```json
 {
   "success": true,
@@ -83,12 +117,17 @@ npm run start:dev
 }
 ```
 
-## Auth Module (Implemented)
+## Auth Module
+
 - `POST /api/auth/register` (user role forced to `USER`)
 - `POST /api/auth/login`
+- `POST /api/auth/refresh` (refresh token rotation)
 - `GET /api/auth/me` (Bearer token)
+- `POST /api/auth/logout` (Bearer token, revokes refresh token)
 
 ## Notes on Matching Strategy
-- Uses bounding-box prefilter in SQL for performance.
-- Then computes exact Haversine distance in service layer.
-- Final results are filtered by radius and sorted ascending by `distance_km`.
+
+- Uses PostGIS geo-distance query in PostgreSQL (no in-memory map over all drivers).
+- Filters by radius in SQL with `ST_DWithin`.
+- Sorts nearest first in SQL by computed `distance_km`.
+- Adds partial GIST geo index for available drivers to scale better on large datasets.
