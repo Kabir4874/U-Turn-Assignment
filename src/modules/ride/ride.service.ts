@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RideRequestDto } from './dto/ride-request.dto';
 
@@ -25,80 +26,48 @@ export class RideService {
       },
     });
 
-    const latDelta = payload.radius_km / 111.12;
-    const lngDelta =
-      payload.radius_km /
-      (111.12 * Math.max(Math.cos((payload.pickup_lat * Math.PI) / 180), 0.01));
-
-    const candidateDrivers = await this.prisma.driver.findMany({
-      where: {
-        isAvailable: true,
-        currentLat: {
-          gte: payload.pickup_lat - latDelta,
-          lte: payload.pickup_lat + latDelta,
-        },
-        currentLng: {
-          gte: payload.pickup_lng - lngDelta,
-          lte: payload.pickup_lng + lngDelta,
-        },
-      },
-      include: {
-        car: {
-          select: {
-            model: true,
-          },
-        },
-      },
-    });
-
-    const availableDrivers = candidateDrivers
-      .map((driver) => {
-        const distanceKm = this.calculateHaversineDistanceKm(
-          payload.pickup_lat,
-          payload.pickup_lng,
-          driver.currentLat,
-          driver.currentLng,
-        );
-
-        return {
-          driver_id: driver.id,
-          car_model: driver.car?.model ?? 'Unknown',
-          distance_km: Number(distanceKm.toFixed(2)),
-          location: {
-            lat: driver.currentLat,
-            lng: driver.currentLng,
-          },
-        };
-      })
-      .filter((driver) => driver.distance_km <= payload.radius_km)
-      .sort((a, b) => a.distance_km - b.distance_km);
+    const availableDrivers = await this.prisma.$queryRaw<
+      Array<{
+        driver_id: number;
+        car_model: string | null;
+        distance_km: number;
+        lat: number;
+        lng: number;
+      }>
+    >(Prisma.sql`
+      SELECT
+        d.id AS driver_id,
+        c.model AS car_model,
+        ROUND((
+          ST_Distance(
+            ST_SetSRID(ST_MakePoint(d."currentLng", d."currentLat"), 4326)::geography,
+            ST_SetSRID(ST_MakePoint(${payload.pickup_lng}, ${payload.pickup_lat}), 4326)::geography
+          ) / 1000
+        )::numeric, 2) AS distance_km,
+        d."currentLat" AS lat,
+        d."currentLng" AS lng
+      FROM "Driver" d
+      LEFT JOIN "Car" c ON c."driverId" = d.id
+      WHERE d."isAvailable" = true
+        AND ST_DWithin(
+          ST_SetSRID(ST_MakePoint(d."currentLng", d."currentLat"), 4326)::geography,
+          ST_SetSRID(ST_MakePoint(${payload.pickup_lng}, ${payload.pickup_lat}), 4326)::geography,
+          ${payload.radius_km} * 1000
+        )
+      ORDER BY distance_km ASC
+    `);
 
     return {
       success: true,
-      available_drivers: availableDrivers,
+      available_drivers: availableDrivers.map((driver) => ({
+        driver_id: driver.driver_id,
+        car_model: driver.car_model ?? 'Unknown',
+        distance_km: Number(driver.distance_km),
+        location: {
+          lat: Number(driver.lat),
+          lng: Number(driver.lng),
+        },
+      })),
     };
-  }
-
-  private calculateHaversineDistanceKm(
-    lat1: number,
-    lng1: number,
-    lat2: number,
-    lng2: number,
-  ): number {
-    const earthRadiusKm = 6371;
-    const toRadians = (degrees: number) => (degrees * Math.PI) / 180;
-
-    const dLat = toRadians(lat2 - lat1);
-    const dLng = toRadians(lng2 - lng1);
-
-    const a =
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(toRadians(lat1)) *
-        Math.cos(toRadians(lat2)) *
-        Math.sin(dLng / 2) *
-        Math.sin(dLng / 2);
-
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return earthRadiusKm * c;
   }
 }
