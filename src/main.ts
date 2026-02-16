@@ -2,7 +2,6 @@ import { RequestMethod, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
-import csurf from 'csurf';
 import 'dotenv/config';
 import { NextFunction, Request, Response } from 'express';
 import helmet from 'helmet';
@@ -108,35 +107,6 @@ async function bootstrap() {
   );
   app.use(passport.initialize());
   app.use(passport.session());
-  if (isProd) {
-    app.use(
-      csurf({
-        cookie: {
-          httpOnly: true,
-          secure: isProd,
-          sameSite: 'lax',
-        },
-      }),
-    );
-    app.use((req: Request, res: Response, next: NextFunction) => {
-      if (
-        req.method === 'GET' ||
-        req.method === 'HEAD' ||
-        req.method === 'OPTIONS'
-      ) {
-        const csrfTokenFn = (req as unknown as { csrfToken?: () => string })
-          .csrfToken;
-        if (csrfTokenFn) {
-          res.cookie('XSRF-TOKEN', csrfTokenFn(), {
-            httpOnly: false,
-            secure: isProd,
-            sameSite: 'lax',
-          });
-        }
-      }
-      next();
-    });
-  }
 
   await app.listen(process.env.PORT ?? 3000);
 }
