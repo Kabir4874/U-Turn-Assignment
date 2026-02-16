@@ -1,6 +1,7 @@
-import { Body, Controller, Post } from '@nestjs/common';
+import { Body, Controller, Post, Query } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Public } from '../../common/decorators/public.decorator';
+import { RideQueryDto } from './dto/ride-query.dto';
 import { RideRequestDto } from './dto/ride-request.dto';
 import { RideService } from './ride.service';
 
@@ -18,7 +19,7 @@ export class RideController {
     status: 201,
     description: 'Available drivers sorted by nearest distance',
   })
-  requestRide(@Body() body: RideRequestDto) {
-    return this.rideService.requestRide(body);
+  requestRide(@Body() body: RideRequestDto, @Query() query: RideQueryDto) {
+    return this.rideService.requestRide(body, query);
   }
 }

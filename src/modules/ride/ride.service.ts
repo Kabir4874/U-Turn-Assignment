@@ -1,13 +1,18 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { RideQueryDto } from './dto/ride-query.dto';
 import { RideRequestDto } from './dto/ride-request.dto';
 
 @Injectable()
 export class RideService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async requestRide(payload: RideRequestDto) {
+  async requestRide(payload: RideRequestDto, query: RideQueryDto) {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 10;
+    const offset = (page - 1) * limit;
+
     const user = await this.prisma.user.findUnique({
       where: { id: payload.user_id },
       select: { id: true },
@@ -33,6 +38,7 @@ export class RideService {
         distance_km: number;
         lat: number;
         lng: number;
+        total_count: bigint | number;
       }>
     >(Prisma.sql`
       SELECT
@@ -45,7 +51,8 @@ export class RideService {
           ) / 1000
         )::numeric, 2) AS distance_km,
         d."currentLat" AS lat,
-        d."currentLng" AS lng
+        d."currentLng" AS lng,
+        COUNT(*) OVER() AS total_count
       FROM "Driver" d
       LEFT JOIN "Car" c ON c."driverId" = d.id
       WHERE d."isAvailable" = true
@@ -54,8 +61,15 @@ export class RideService {
           ST_SetSRID(ST_MakePoint(${payload.pickup_lng}, ${payload.pickup_lat}), 4326)::geography,
           ${payload.radius_km} * 1000
         )
-      ORDER BY distance_km ASC
+      ORDER BY distance_km ASC, d.id ASC
+      LIMIT ${limit}
+      OFFSET ${offset}
     `);
+
+    const total = availableDrivers[0]
+      ? Number(availableDrivers[0].total_count)
+      : 0;
+    const totalPage = Math.ceil(total / limit);
 
     return {
       success: true,
@@ -68,6 +82,12 @@ export class RideService {
           lng: Number(driver.lng),
         },
       })),
+      meta: {
+        page,
+        limit,
+        total,
+        totalPage,
+      },
     };
   }
 }
