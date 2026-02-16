@@ -5,6 +5,7 @@ import cookieParser from 'cookie-parser';
 import csurf from 'csurf';
 import 'dotenv/config';
 import { NextFunction, Request, Response } from 'express';
+import helmet from 'helmet';
 import session from 'express-session';
 import hpp from 'hpp';
 import passport from 'passport';
@@ -51,7 +52,44 @@ async function bootstrap() {
     )
     .build();
   const swaggerDoc = SwaggerModule.createDocument(app, swaggerConfig);
-  SwaggerModule.setup('docs', app, swaggerDoc);
+  SwaggerModule.setup('docs', app, swaggerDoc, {
+    jsonDocumentUrl: 'docs-json',
+    customCssUrl: 'https://unpkg.com/swagger-ui-dist@5/swagger-ui.css',
+    customJs: [
+      'https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js',
+      'https://unpkg.com/swagger-ui-dist@5/swagger-ui-standalone-preset.js',
+    ],
+    swaggerOptions: {
+      url: '/docs-json',
+      persistAuthorization: true,
+    },
+  });
+
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    const isSwaggerRoute =
+      req.path === '/docs' ||
+      req.path.startsWith('/docs/') ||
+      req.path === '/docs-json';
+
+    const middleware = helmet({
+      contentSecurityPolicy: isSwaggerRoute
+        ? {
+            directives: {
+              defaultSrc: ["'self'"],
+              imgSrc: ["'self'", 'data:', 'https:'],
+              styleSrc: ["'self'", "'unsafe-inline'", 'https://unpkg.com'],
+              scriptSrc: ["'self'", "'unsafe-inline'", 'https://unpkg.com'],
+              connectSrc: ["'self'"],
+              fontSrc: ["'self'", 'https:', 'data:'],
+            },
+          }
+        : isProd,
+      crossOriginResourcePolicy: { policy: 'cross-origin' },
+      referrerPolicy: { policy: 'no-referrer' },
+    });
+
+    middleware(req, res, next);
+  });
 
   app.use(hpp());
   app.use(cookieParser());
