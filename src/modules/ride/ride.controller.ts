@@ -1,6 +1,5 @@
 import { Body, Controller, Post, Query } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { Public } from '../../common/decorators/public.decorator';
 import { RideQueryDto } from './dto/ride-query.dto';
 import { RideRequestDto } from './dto/ride-request.dto';
 import { RideService } from './ride.service';
@@ -10,7 +9,6 @@ import { RideService } from './ride.service';
 export class RideController {
   constructor(private readonly rideService: RideService) {}
 
-  @Public()
   @Post('request')
   @ApiOperation({
     summary: 'Request a ride and get nearest available drivers within radius',
