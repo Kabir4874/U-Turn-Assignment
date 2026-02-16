@@ -1,0 +1,59 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+model User {
+  id           Int           @id @default(autoincrement())
+  phone     String   @unique
+  email     String   @unique
+  password  String
+  name      String
+  role      UserRole @default(USER)
+  rideRequests  RideRequest[]
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+}
+
+model Driver {
+  id          Int      @id @default(autoincrement())
+  name        String
+  isAvailable Boolean  @default(true)
+  currentLat  Float
+  currentLng  Float
+  car         Car?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([isAvailable, currentLat, currentLng])
+}
+
+model Car {
+  id          Int      @id @default(autoincrement())
+  driverId    Int      @unique
+  model       String
+  plateNumber String   @unique
+  driver      Driver   @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model RideRequest {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  pickupLat Float
+  pickupLng Float
+  radiusKm  Float
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
