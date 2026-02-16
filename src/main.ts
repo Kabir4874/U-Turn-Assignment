@@ -1,18 +1,17 @@
-import 'dotenv/config';
-import csurf from 'csurf';
-import cookieParser from 'cookie-parser';
-import session from 'express-session';
-import helmet from 'helmet';
-import hpp from 'hpp';
-import { NestFactory } from '@nestjs/core';
-import passport from 'passport';
 import { RequestMethod, ValidationPipe } from '@nestjs/common';
+import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import cookieParser from 'cookie-parser';
+import csurf from 'csurf';
+import 'dotenv/config';
 import { NextFunction, Request, Response } from 'express';
+import session from 'express-session';
+import hpp from 'hpp';
+import passport from 'passport';
 import { AppModule } from './app.module';
-import './config/passport.config';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
+import './config/passport.config';
 
 async function bootstrap() {
   const isProd = process.env.NODE_ENV === 'production';
@@ -54,16 +53,6 @@ async function bootstrap() {
   const swaggerDoc = SwaggerModule.createDocument(app, swaggerConfig);
   SwaggerModule.setup('docs', app, swaggerDoc);
 
-  app.use((req: Request, res: Response, next: NextFunction) => {
-    const isSwaggerRoute =
-      req.path === '/docs' || req.path.startsWith('/docs/');
-    const middleware = helmet({
-      contentSecurityPolicy: isProd && !isSwaggerRoute,
-      crossOriginResourcePolicy: { policy: 'cross-origin' },
-      referrerPolicy: { policy: 'no-referrer' },
-    });
-    middleware(req, res, next);
-  });
   app.use(hpp());
   app.use(cookieParser());
 
